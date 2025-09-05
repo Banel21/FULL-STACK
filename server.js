@@ -1,3 +1,16 @@
+// --- Patch fetch + Headers for Node.js 16 (needed for googleapis) ---
+(async () => {
+  const fetchModule = await import("node-fetch");
+  const fetch = fetchModule.default;
+  const { Headers, Request, Response } = fetchModule;
+
+  globalThis.fetch = fetch;
+  globalThis.Headers = Headers;
+  globalThis.Request = Request;
+  globalThis.Response = Response;
+})();
+
+// --- Dependencies ---
 require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -204,7 +217,7 @@ async function appendOrderToSheet(order) {
       spreadsheetId: GOOGLE_SHEET_ID,
       range: 'Sheet1!A:H',
       valueInputOption: 'RAW',
-      requestBody: { values } // ✅ FIXED (was "resource")
+      requestBody: { values } // ✅ FIXED (use requestBody instead of resource)
     });
 
     logger.info('Order appended to Google Sheet', { orderId: order._id });
