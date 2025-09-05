@@ -7,10 +7,10 @@ const path = require('path');
 const morgan = require('morgan');
 const winston = require('winston');
 const { google } = require('googleapis');
-const fs = require('fs');
 
 // --- Product → Category mapping ---
 const productCategories = {
+  // Ezasekamelweni
   "DONSA": "Ezasekamelweni",
   "MAPHIPHA": "Ezasekamelweni",
   "MIXER FOR MAN": "Ezasekamelweni",
@@ -28,6 +28,7 @@ const productCategories = {
   "MACHAMISA": "Ezasekamelweni",
   "MAHLANYISA": "Ezasekamelweni",
   "MSHUBO": "Ezasekamelweni",
+  // Ezempilo
   "ASTHMA & DLISO": "Ezempilo",
   "MBIZA EMHLOPHE": "Ezempilo",
   "SKHONDLA KHONDLA": "Ezempilo",
@@ -44,6 +45,7 @@ const productCategories = {
   "GUDUZA": "Ezempilo",
   "COMBO YAMA PILES": "Ezempilo",
   "KHIPHA IDLISO POWDER": "Ezempilo",
+  // Ezokuthandeka
   "MOYI MOYI": "Ezokuthandeka",
   "IBHODLELA": "Ezokuthandeka",
   "SHUKELA": "Ezokuthandeka",
@@ -59,10 +61,10 @@ const productCategories = {
   "SKHAFULO": "Ezokuthandeka"
 };
 
-// --- Create app ---
+// --- App setup ---
 const app = express();
 
-// --- Logger setup ---
+// --- Logger ---
 const logger = winston.createLogger({
   level: 'info',
   format: winston.format.combine(
@@ -72,7 +74,7 @@ const logger = winston.createLogger({
   transports: [
     new winston.transports.Console(),
     new winston.transports.File({ filename: 'project.log' })
-  ],
+  ]
 });
 
 // --- Middleware ---
@@ -107,7 +109,10 @@ const orderSchema = new mongoose.Schema({
     quantity: Number,
     category: String
   }],
-  created_at: { type: Date, default: () => new Date(new Date().toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg' })) }
+  created_at: {
+    type: Date,
+    default: () => new Date(new Date().toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg' }))
+  }
 });
 const Order = mongoose.model('Order', orderSchema);
 
@@ -117,56 +122,71 @@ const transporter = nodemailer.createTransport({
   port: parseInt(process.env.SMTP_PORT || '587', 10),
   secure: false,
   requireTLS: true,
-  auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS
+  },
   tls: { rejectUnauthorized: false }
 });
 transporter.verify(err => {
   if (err) logger.error('SMTP Connection Error:', err);
-  else logger.info('SMTP Server ready');
+  else logger.info('SMTP Server ready to send emails');
 });
 
 // --- Google Sheets setup ---
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
 let sheets = null;
-try {
-  if (process.env.GOOGLE_CREDENTIALS) {
-    const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
-    const auth = new google.auth.GoogleAuth({ credentials, scopes: SCOPES });
+
+if (process.env.GOOGLE_CREDENTIALS) {
+  try {
+    const creds = JSON.parse(process.env.GOOGLE_CREDENTIALS);
+    creds.private_key = creds.private_key.replace(/\\n/g, '\n'); // Render-friendly fix
+
+    const auth = new google.auth.GoogleAuth({
+      credentials: creds,
+      scopes: SCOPES
+    });
     sheets = google.sheets({ version: 'v4', auth });
-    logger.info('Google Sheets API ready');
-  } else {
-    logger.warn('GOOGLE_CREDENTIALS not set - Sheets disabled');
+    logger.info('Google Sheets API initialized');
+  } catch (err) {
+    logger.error('Failed to parse GOOGLE_CREDENTIALS:', err);
   }
-} catch (err) {
-  logger.error('Failed to initialize Google Sheets:', err.message);
+} else {
+  logger.warn('GOOGLE_CREDENTIALS is not set');
 }
 
-// --- Helpers ---
-const formatSA = date => new Date(date).toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg' });
+// --- Helper functions ---
+function formatSA(date) {
+  return new Date(date).toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg' });
+}
 
-const formatOrderEmail = order => `
-  <div style="font-family: Arial; color:#333">
-    <h2 style="color:#2e7d32">New Order Received</h2>
-    <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">
-      <tr><td><b>Customer Name</b></td><td>${order.name}</td></tr>
-      <tr><td><b>Sender Number</b></td><td>${order.sender_number}</td></tr>
-      <tr><td><b>Receiver Name</b></td><td>${order.receiver_name}</td></tr>
-      <tr><td><b>Receiver Number</b></td><td>${order.receiver_number}</td></tr>
-      <tr><td><b>Pep Code</b></td><td>${order.pep_code || 'N/A'}</td></tr>
-      <tr><td><b>Order ID</b></td><td>${order._id}</td></tr>
-      <tr><td><b>Created At</b></td><td>${formatSA(order.created_at)}</td></tr>
-    </table>
-    <h3 style="color:#2e7d32">Products Ordered:</h3>
-    <table style="width:100%;border-collapse:collapse;">
-      <tr style="background:#f1f8e9;"><th>Product</th><th>Category</th><th>Quantity</th></tr>
-      ${order.products.map(p => `<tr><td>${p.name}</td><td>${p.category}</td><td>${p.quantity}</td></tr>`).join('')}
-    </table>
-  </div>
-`;
+function formatOrderEmail(order) {
+  return `
+    <div style="font-family: Arial, sans-serif; color: #333;">
+      <h2 style="color: #2e7d32;">New Order Received</h2>
+      <table style="width:100%; border-collapse: collapse;">
+        <tr><td><b>Customer Name</b></td><td>${order.name}</td></tr>
+        <tr><td><b>Sender Number</b></td><td>${order.sender_number}</td></tr>
+        <tr><td><b>Receiver Name</b></td><td>${order.receiver_name}</td></tr>
+        <tr><td><b>Receiver Number</b></td><td>${order.receiver_number}</td></tr>
+        <tr><td><b>Pep Code</b></td><td>${order.pep_code || 'N/A'}</td></tr>
+        <tr><td><b>Order ID</b></td><td>${order._id}</td></tr>
+        <tr><td><b>Created At</b></td><td>${formatSA(order.created_at)}</td></tr>
+      </table>
+      <h3>Products Ordered:</h3>
+      <table style="width:100%; border-collapse: collapse;">
+        <tr style="background:#f1f8e9;">
+          <th>Product</th><th>Category</th><th>Quantity</th>
+        </tr>
+        ${order.products.map(p => `<tr><td>${p.name}</td><td>${p.category}</td><td>${p.quantity}</td></tr>`).join('')}
+      </table>
+    </div>
+  `;
+}
 
-// --- Append order to Google Sheet ---
+// --- Append order to Google Sheets ---
 async function appendOrderToSheet(order) {
-  if (!sheets) return false;
+  if (!sheets) return;
 
   try {
     const values = [[
@@ -186,60 +206,77 @@ async function appendOrderToSheet(order) {
       valueInputOption: 'RAW',
       resource: { values }
     });
+
     logger.info('Order appended to Google Sheet', { orderId: order._id });
-    return true;
   } catch (err) {
-    logger.error('Failed to append order to sheet:', err.message);
-    return false;
+    logger.error('Failed to append order to sheet:', err);
   }
 }
 
 // --- Routes ---
-app.get('/status', (req, res) => res.json({ uptime: process.uptime(), message: 'OK', environment: process.env.NODE_ENV || 'development', googleSheets: !!sheets }));
+app.get('/status', (req, res) => {
+  res.json({
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development',
+    googleSheets: !!sheets
+  });
+});
 
 app.post('/submit', async (req, res) => {
   try {
     const { name, sender_number, receiver_name, receiver_number, pep_code, products } = req.body;
-    if (!name || !sender_number || !receiver_name || !receiver_number || !Array.isArray(products) || !products.length)
-      return res.status(400).json({ success: false, message: 'Missing required fields or products' });
+
+    if (!name || !sender_number || !receiver_name || !receiver_number || !Array.isArray(products) || products.length === 0) {
+      return res.status(400).json({ success: false, message: 'Missing required fields or products.' });
+    }
 
     const productList = products.map(p => {
       const productName = p.split(' (x')[0];
       const quantity = parseInt(p.match(/\(x(\d+)\)/)?.[1] || '1', 10);
-      return { name: productName, quantity, category: productCategories[productName] || 'Unknown' };
+      const category = productCategories[productName] || 'Unknown';
+      return { name: productName, quantity, category };
     });
 
-    const savedOrder = await new Order({ name, sender_number, receiver_name, receiver_number, pep_code: pep_code || '', products: productList }).save();
+    const savedOrder = await new Order({
+      name,
+      sender_number,
+      receiver_name,
+      receiver_number,
+      pep_code: pep_code || '',
+      products: productList
+    }).save();
 
-    // Google Sheets (non-critical)
-    await appendOrderToSheet(savedOrder);
+    // Google Sheets append
+    appendOrderToSheet(savedOrder);
 
-    // Email (non-critical)
-    try {
-      await transporter.sendMail({ from: `"Order System" <${process.env.SMTP_USER}>`, to: COMPANY_EMAIL, subject: `New Order #${savedOrder._id}`, html: formatOrderEmail(savedOrder) });
-      logger.info('Email sent', { orderId: savedOrder._id });
-    } catch (err) { logger.error('Email send failed:', err.message); }
+    // Send email
+    transporter.sendMail({
+      from: `"Order System" <${process.env.SMTP_USER}>`,
+      to: COMPANY_EMAIL,
+      subject: `New Order #${savedOrder._id}`,
+      html: formatOrderEmail(savedOrder)
+    }).then(() => logger.info('Email sent', { orderId: savedOrder._id }))
+      .catch(err => logger.error('Email sending error:', err));
 
-    res.json({ success: true, message: 'Order processed', orderId: savedOrder._id, googleSheetsUpdated: !!sheets });
+    res.json({ success: true, message: 'Order processed successfully.', orderId: savedOrder._id });
   } catch (err) {
-    logger.error('Submit error:', err);
-    res.status(500).json({ success: false, message: 'Server error: ' + err.message });
+    logger.error('Error in /submit:', err);
+    res.status(500).json({ success: false, message: err.message });
   }
 });
 
-// --- Health check ---
+// Health check
 app.get('/health', (req, res) => {
-  res.status(200).json({
+  res.json({
     status: 'OK',
-    timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
-    googleSheets: !!sheets,
-    mongo: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+    mongo: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    googleSheets: !!sheets
   });
 });
 
 // --- Start server ---
 app.listen(PORT, () => {
-  logger.info(`Server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
-  logger.info(`Google Sheets: ${sheets ? 'ENABLED' : 'DISABLED'}`);
+  logger.info(`Server running on http://localhost:${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
+  logger.info(`Google Sheets API: ${sheets ? 'ENABLED' : 'DISABLED'}`);
 });
