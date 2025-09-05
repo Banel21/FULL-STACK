@@ -204,7 +204,7 @@ async function appendOrderToSheet(order) {
       spreadsheetId: GOOGLE_SHEET_ID,
       range: 'Sheet1!A:H',
       valueInputOption: 'RAW',
-      resource: { values }
+      requestBody: { values } // ✅ FIXED (was "resource")
     });
 
     logger.info('Order appended to Google Sheet', { orderId: order._id });
