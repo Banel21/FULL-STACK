@@ -139,17 +139,41 @@ transporter.verify(err => {
 // --- Google Sheets setup ---
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
 
-// FIXED: Use environment variable in production, local file in development
-let credentials;
-if (process.env.NODE_ENV === 'production') {
-  // Parse the JSON string from the environment variable
-  credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
-} else {
-  // Use the local file for development
-  credentials = JSON.parse(fs.readFileSync('credentials.json'));
+// SAFE: Google credentials handling with error protection
+let credentials = null;
+let auth = null;
+let sheets = null;
+
+try {
+  if (process.env.NODE_ENV === 'production') {
+    // Safely handle production credentials
+    const credsString = process.env.GOOGLE_CREDENTIALS;
+    if (!credsString) {
+      logger.warn('GOOGLE_CREDENTIALS environment variable is not set in production');
+    } else {
+      try {
+        credentials = JSON.parse(credsString);
+        auth = new google.auth.GoogleAuth({ credentials, scopes: SCOPES });
+        sheets = google.sheets({ version: 'v4', auth });
+        logger.info('Google Sheets API initialized successfully in production');
+      } catch (parseError) {
+        logger.error('Failed to parse GOOGLE_CREDENTIALS JSON:', parseError);
+      }
+    }
+  } else {
+    // Development - use local file
+    try {
+      credentials = JSON.parse(fs.readFileSync('credentials.json'));
+      auth = new google.auth.GoogleAuth({ credentials, scopes: SCOPES });
+      sheets = google.sheets({ version: 'v4', auth });
+      logger.info('Google Sheets API initialized successfully in development');
+    } catch (fileError) {
+      logger.warn('Failed to read credentials.json - Google Sheets disabled in development:', fileError.message);
+    }
+  }
+} catch (error) {
+  logger.error('Google Sheets initialization failed:', error);
 }
-const auth = new google.auth.GoogleAuth({ credentials, scopes: SCOPES });
-const sheets = google.sheets({ version: 'v4', auth });
 
 // --- Helpers ---
 function formatSA(date) {
@@ -186,6 +210,12 @@ function formatOrderEmail(order) {
 
 // --- Append order to Google Sheet and update summary ---
 async function appendOrderToSheet(order) {
+  // Check if Google Sheets is configured
+  if (!sheets) {
+    logger.warn('Google Sheets not configured - skipping sheet update');
+    return false;
+  }
+
   try {
     // Append raw order
     const values = [[
@@ -247,10 +277,11 @@ async function appendOrderToSheet(order) {
       resource: { values: summaryValues }
     });
     
+    logger.info('Order successfully appended to Google Sheet', { orderId: order._id });
     return true;
   } catch (error) {
     logger.error('Error in appendOrderToSheet:', error);
-    throw error;
+    return false;
   }
 }
 
@@ -258,7 +289,8 @@ async function appendOrderToSheet(order) {
 app.get('/status', (req, res) => res.json({ 
   uptime: process.uptime(), 
   message: 'OK',
-  environment: process.env.NODE_ENV || 'development'
+  environment: process.env.NODE_ENV || 'development',
+  googleSheets: !!sheets
 }));
 
 app.post('/submit', async (req, res) => {
@@ -290,13 +322,14 @@ app.post('/submit', async (req, res) => {
       products: productList
     }).save();
 
+    // Try to update Google Sheets (but don't fail the order if it doesn't work)
     try {
       await appendOrderToSheet(savedOrder);
-      logger.info('Order appended to Google Sheet and summary updated', { orderId: savedOrder._id });
     } catch (err) {
-      logger.error('Google Sheet error', { error: err });
+      logger.error('Google Sheet error (non-critical):', { error: err.message });
     }
 
+    // Try to send email (but don't fail the order if it doesn't work)
     try {
       await transporter.sendMail({
         from: `"Order System" <${process.env.SMTP_USER}>`,
@@ -306,10 +339,15 @@ app.post('/submit', async (req, res) => {
       });
       logger.info('Email sent successfully', { orderId: savedOrder._id });
     } catch (err) {
-      logger.error('Email sending error', { error: err });
+      logger.error('Email sending error (non-critical):', { error: err.message });
     }
 
-    res.json({ success: true, message: 'Order processed successfully.', orderId: savedOrder._id });
+    res.json({ 
+      success: true, 
+      message: 'Order processed successfully.', 
+      orderId: savedOrder._id,
+      googleSheetsUpdated: !!sheets
+    });
   } catch (err) {
     logger.error('Error handling /submit', { error: err });
     res.status(500).json({ success: false, message: 'Server error: ' + err.message });
@@ -321,9 +359,14 @@ app.get('/health', (req, res) => {
   res.status(200).json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development'
+    environment: process.env.NODE_ENV || 'development',
+    googleSheets: !!sheets,
+    mongo: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
   });
 });
 
 // --- Start server ---
-app.listen(PORT, () => logger.info(`Server running on http://localhost:${PORT} in ${process.env.NODE_ENV || 'development'} mode`));
+app.listen(PORT, () => {
+  logger.info(`Server running on http://localhost:${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
+  logger.info(`Google Sheets: ${sheets ? 'ENABLED' : 'DISABLED'}`);
+});
