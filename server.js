@@ -23,7 +23,6 @@ const { google } = require('googleapis');
 
 // --- Product → Category mapping ---
 const productCategories = {
-  // Ezasekamelweni
   "DONSA": "Ezasekamelweni",
   "MAPHIPHA": "Ezasekamelweni",
   "MIXER FOR MAN": "Ezasekamelweni",
@@ -41,7 +40,6 @@ const productCategories = {
   "MACHAMISA": "Ezasekamelweni",
   "MAHLANYISA": "Ezasekamelweni",
   "MSHUBO": "Ezasekamelweni",
-  // Ezempilo
   "ASTHMA & DLISO": "Ezempilo",
   "MBIZA EMHLOPHE": "Ezempilo",
   "SKHONDLA KHONDLA": "Ezempilo",
@@ -58,7 +56,6 @@ const productCategories = {
   "GUDUZA": "Ezempilo",
   "COMBO YAMA PILES": "Ezempilo",
   "KHIPHA IDLISO POWDER": "Ezempilo",
-  // Ezokuthandeka
   "MOYI MOYI": "Ezokuthandeka",
   "IBHODLELA": "Ezokuthandeka",
   "SHUKELA": "Ezokuthandeka",
@@ -135,16 +132,10 @@ const transporter = nodemailer.createTransport({
   port: parseInt(process.env.SMTP_PORT || '587', 10),
   secure: false,
   requireTLS: true,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS
-  },
+  auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
   tls: { rejectUnauthorized: false }
 });
-transporter.verify(err => {
-  if (err) logger.error('SMTP Connection Error:', err);
-  else logger.info('SMTP Server ready to send emails');
-});
+transporter.verify(err => err ? logger.error('SMTP Error:', err) : logger.info('SMTP ready'));
 
 // --- Google Sheets setup ---
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
@@ -153,22 +144,14 @@ let sheets = null;
 if (process.env.GOOGLE_CREDENTIALS) {
   try {
     const creds = JSON.parse(process.env.GOOGLE_CREDENTIALS);
-    creds.private_key = creds.private_key.replace(/\\n/g, '\n'); // Render-friendly fix
-
-    const auth = new google.auth.GoogleAuth({
-      credentials: creds,
-      scopes: SCOPES
-    });
+    creds.private_key = creds.private_key.replace(/\\n/g, '\n');
+    const auth = new google.auth.GoogleAuth({ credentials: creds, scopes: SCOPES });
     sheets = google.sheets({ version: 'v4', auth });
     logger.info('Google Sheets API initialized');
-  } catch (err) {
-    logger.error('Failed to parse GOOGLE_CREDENTIALS:', err);
-  }
-} else {
-  logger.warn('GOOGLE_CREDENTIALS is not set');
+  } catch (err) { logger.error('GOOGLE_CREDENTIALS error:', err); }
 }
 
-// --- Helper functions ---
+// --- Helpers ---
 function formatSA(date) {
   return new Date(date).toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg' });
 }
@@ -197,12 +180,12 @@ function formatOrderEmail(order) {
   `;
 }
 
-// --- Append order to Google Sheets ---
+// --- Append order + update product summary ---
 async function appendOrderToSheet(order) {
   if (!sheets) return;
-
   try {
-    const values = [[
+    // Append individual order
+    const orderValues = [[
       order._id.toString(),
       order.name,
       order.sender_number,
@@ -212,81 +195,63 @@ async function appendOrderToSheet(order) {
       order.products.map(p => `${p.name} (x${p.quantity})`).join(', '),
       formatSA(order.created_at)
     ]];
-
     await sheets.spreadsheets.values.append({
       spreadsheetId: GOOGLE_SHEET_ID,
-      range: 'Sheet1!A:H',
+      range: 'Orders!A:H',
       valueInputOption: 'RAW',
-      requestBody: { values } // ✅ FIXED (use requestBody instead of resource)
+      requestBody: { values: orderValues }
     });
+    logger.info('Order appended', { orderId: order._id });
 
-    logger.info('Order appended to Google Sheet', { orderId: order._id });
-  } catch (err) {
-    logger.error('Failed to append order to sheet:', err);
-  }
+    // Update product summary
+    const totals = await Order.aggregate([
+      { $unwind: "$products" },
+      { $group: { _id: "$products.name", totalQuantity: { $sum: "$products.quantity" }, itemsSold: { $sum: 1 } } },
+      { $sort: { _id: 1 } }
+    ]);
+    const summaryValues = [["Product Name","Quantity Ordered","Items Sold"], ...totals.map(p => [p._id, p.totalQuantity, p.itemsSold])];
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: GOOGLE_SHEET_ID,
+      range: "ProductsSummary!A1:C",
+      valueInputOption: "RAW",
+      requestBody: { values: summaryValues }
+    });
+    logger.info('Product summary updated');
+  } catch (err) { logger.error('Google Sheets error:', err); }
 }
 
 // --- Routes ---
-app.get('/status', (req, res) => {
-  res.json({
-    uptime: process.uptime(),
-    environment: process.env.NODE_ENV || 'development',
-    googleSheets: !!sheets
-  });
-});
+app.get('/status', (req, res) => res.json({ uptime: process.uptime(), environment: process.env.NODE_ENV || 'development', googleSheets: !!sheets }));
 
 app.post('/submit', async (req, res) => {
   try {
     const { name, sender_number, receiver_name, receiver_number, pep_code, products } = req.body;
-
-    if (!name || !sender_number || !receiver_name || !receiver_number || !Array.isArray(products) || products.length === 0) {
+    if (!name || !sender_number || !receiver_name || !receiver_number || !Array.isArray(products) || products.length === 0)
       return res.status(400).json({ success: false, message: 'Missing required fields or products.' });
-    }
 
     const productList = products.map(p => {
       const productName = p.split(' (x')[0];
       const quantity = parseInt(p.match(/\(x(\d+)\)/)?.[1] || '1', 10);
-      const category = productCategories[productName] || 'Unknown';
-      return { name: productName, quantity, category };
+      return { name: productName, quantity, category: productCategories[productName] || 'Unknown' };
     });
 
-    const savedOrder = await new Order({
-      name,
-      sender_number,
-      receiver_name,
-      receiver_number,
-      pep_code: pep_code || '',
-      products: productList
-    }).save();
+    const savedOrder = await new Order({ name, sender_number, receiver_name, receiver_number, pep_code: pep_code || '', products: productList }).save();
 
-    // Google Sheets append
     appendOrderToSheet(savedOrder);
 
-    // Send email
     transporter.sendMail({
       from: `"Order System" <${process.env.SMTP_USER}>`,
       to: COMPANY_EMAIL,
       subject: `New Order #${savedOrder._id}`,
       html: formatOrderEmail(savedOrder)
     }).then(() => logger.info('Email sent', { orderId: savedOrder._id }))
-      .catch(err => logger.error('Email sending error:', err));
+      .catch(err => logger.error('Email error:', err));
 
     res.json({ success: true, message: 'Order processed successfully.', orderId: savedOrder._id });
-  } catch (err) {
-    logger.error('Error in /submit:', err);
-    res.status(500).json({ success: false, message: err.message });
-  }
+  } catch (err) { logger.error('Submit error:', err); res.status(500).json({ success: false, message: err.message }); }
 });
 
-// Health check
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'OK',
-    environment: process.env.NODE_ENV || 'development',
-    mongo: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
-    googleSheets: !!sheets
-  });
-});
+app.get('/health', (req, res) => res.json({ status: 'OK', environment: process.env.NODE_ENV || 'development', mongo: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected', googleSheets: !!sheets }));
 
 // --- Start server ---
 app.listen(PORT, () => {
