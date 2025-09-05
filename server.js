@@ -124,7 +124,7 @@ const orderSchema = new mongoose.Schema({
     default: () => new Date(new Date().toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg' }))
   }
 });
-const order = mongoose.model('order', orderSchema);
+const Order = mongoose.model('Order', orderSchema);
 
 // --- Nodemailer setup ---
 const transporter = nodemailer.createTransport({
@@ -197,14 +197,14 @@ async function appendOrderToSheet(order) {
     ]];
     await sheets.spreadsheets.values.append({
       spreadsheetId: GOOGLE_SHEET_ID,
-      range: 'orders!A:H',
+      range: 'Orders!A:H',
       valueInputOption: 'RAW',
       requestBody: { values: orderValues }
     });
-    logger.info('order appended', { orderId: order._id });
+    logger.info('Order appended', { orderId: order._id });
 
     // Update product summary
-    const totals = await order.aggregate([
+    const totals = await Order.aggregate([
       { $unwind: "$products" },
       { $group: { _id: "$products.name", totalQuantity: { $sum: "$products.quantity" }, itemsSold: { $sum: 1 } } },
       { $sort: { _id: 1 } }
@@ -235,7 +235,7 @@ app.post('/submit', async (req, res) => {
       return { name: productName, quantity, category: productCategories[productName] || 'Unknown' };
     });
 
-    const savedOrder = await new order({ name, sender_number, receiver_name, receiver_number, pep_code: pep_code || '', products: productList }).save();
+    const savedOrder = await new Order({ name, sender_number, receiver_name, receiver_number, pep_code: pep_code || '', products: productList }).save();
 
     appendOrderToSheet(savedOrder);
 
