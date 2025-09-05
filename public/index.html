@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Order POS</title>
+<style>
+/* --- Global Styles --- */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #e8f5e9;
+    margin: 0;
+    padding: 0;
+}
+.container {
+    max-width: 950px;
+    margin: 20px auto;
+    background: #fff;
+    padding: 20px 30px;
+    border-radius: 12px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+}
+header img {
+    display: block;
+    margin: 0 auto 20px;
+    max-width: 160px;
+}
+h1 {
+    text-align: center;
+    color: #2e7d32;
+    margin-bottom: 20px;
+}
+label {
+    display: block;
+    margin-top: 15px;
+    font-weight: 600;
+    color: #2e7d32;
+}
+input {
+    width: 100%;
+    padding: 10px;
+    margin-top: 5px;
+    box-sizing: border-box;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+}
+button, .product-btn {
+    cursor: pointer;
+    font-weight: 600;
+    border-radius: 6px;
+    transition: 0.2s;
+}
+button[type="submit"] {
+    width: 100%;
+    background: #2e7d32;
+    color: white;
+    padding: 12px;
+    border: none;
+    margin-top: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+button[type="submit"]:hover {
+    background: #1b5e20;
+}
+
+/* --- Spinner --- */
+.spinner {
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid white;
+    border-radius: 50%;
+    width: 18px;
+    height: 18px;
+    margin-left: 10px;
+    animation: spin 1s linear infinite;
+}
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* --- Product Categories --- */
+#productCategories {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin-top: 25px;
+}
+.category {
+    flex: 1 1 30%;
+    border: 1px solid #c8e6c9;
+    border-radius: 8px;
+    padding: 12px;
+    background: #f1f8e9;
+    transition: 0.3s;
+}
+.category h3 {
+    margin: 0 0 10px;
+    cursor: pointer;
+    user-select: none;
+    border-bottom: 1px solid #c8e6c9;
+    padding-bottom: 5px;
+    color: #2e7d32;
+}
+.product-btn {
+    display: block;
+    width: 100%;
+    margin: 6px 0;
+    padding: 10px;
+    background: #43a047;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    text-align: center;
+}
+.product-btn:hover {
+    background: #2e7d32;
+}
+.category .product-btn {
+    display: none;
+}
+.category.open .product-btn {
+    display: block;
+}
+
+/* --- Order List --- */
+#orderList {
+    margin-top: 15px;
+    max-height: 300px;
+    overflow-y: auto;
+    border-top: 1px solid #c8e6c9;
+    padding-top: 10px;
+}
+.order-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 0;
+    border-bottom: 1px solid #c8e6c9;
+}
+.order-qty {
+    width: 60px;
+    margin-right: 10px;
+    padding: 5px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+}
+.remove-btn {
+    background: #e53935;
+    border: none;
+    color: white;
+    border-radius: 4px;
+    padding: 5px 10px;
+}
+.remove-btn:hover {
+    background: #b71c1c;
+}
+
+/* --- Messages --- */
+.message {
+    margin-top: 20px;
+    font-weight: bold;
+    text-align: center;
+    font-size: 1.1em;
+}
+.message.success { color: #2e7d32; }
+.message.error { color: #e53935; }
+
+/* --- Scrollbar Styling --- */
+#orderList::-webkit-scrollbar {
+    width: 8px;
+}
+#orderList::-webkit-scrollbar-thumb {
+    background: #2e7d32;
+    border-radius: 4px;
+}
+
+/* --- Responsive --- */
+@media(max-width:768px){
+    .category { flex: 1 1 100%; }
+}
+</style>
+</head>
+<body>
+<main class="container">
+<header><img src="/logo.jpg" alt="Company Logo"></header>
+<h1>Order POS</h1>
+
+<form id="orderForm">
+<label>Name</label><input name="name" required>
+<label>Sender Number</label><input name="sender_number" required>
+<label>Receiver Name</label><input name="receiver_name" required>
+<label>Receiver Number</label><input name="receiver_number" required>
+<label>Pep Code/Place</label><input name="pep_code">
+
+<h1>Select Products</h1>
+<div id="productCategories">
+  <!-- Ezasekamelweni -->
+  <div class="category" data-category="Ezasekamelweni">
+    <h3>Ezasekamelweni</h3>
+    <button type="button" class="product-btn" data-name="DONSA">DONSA</button>
+    <button type="button" class="product-btn" data-name="MAPHIPHA">MAPHIPHA</button>
+    <button type="button" class="product-btn" data-name="MIXER FOR MAN">MIXER FOR MAN</button>
+    <button type="button" class="product-btn" data-name="MV">MV</button>
+    <button type="button" class="product-btn" data-name="RS">RS</button>
+    <button type="button" class="product-btn" data-name="MD">MD</button>
+    <button type="button" class="product-btn" data-name="NHLONIPHO">NHLONIPHO</button>
+    <button type="button" class="product-btn" data-name="NHLONIPHO WENKANI">NHLONIPHO WENKANI</button>
+    <button type="button" class="product-btn" data-name="DLISO LANGAPHANSI">DLISO LANGAPHANSI</button>
+    <button type="button" class="product-btn" data-name="SCOBECOBE">SCOBECOBE</button>
+    <button type="button" class="product-btn" data-name="DUMBA">DUMBA</button>
+    <button type="button" class="product-btn" data-name="FRANK">FRANK</button>
+    <button type="button" class="product-btn" data-name="NSIZI MVUSA">NSIZI MVUSA</button>
+    <button type="button" class="product-btn" data-name="MASHESHISA">MASHESHISA</button>
+    <button type="button" class="product-btn" data-name="MACHAMISA">MACHAMISA</button>
+    <button type="button" class="product-btn" data-name="MAHLANYISA">MAHLANYISA</button>
+    <button type="button" class="product-btn" data-name="MSHUBO">MSHUBO</button>
+  </div>
+
+  <!-- Ezempilo -->
+  <div class="category" data-category="Ezempilo">
+    <h3>Ezempilo</h3>
+    <button type="button" class="product-btn" data-name="ASTHMA & DLISO">ASTHMA & DLISO</button>
+    <button type="button" class="product-btn" data-name="MBIZA EMHLOPHE">MBIZA EMHLOPHE</button>
+    <button type="button" class="product-btn" data-name="SKHONDLA KHONDLA">SKHONDLA KHONDLA</button>
+    <button type="button" class="product-btn" data-name="JIKELELE">JIKELELE</button>
+    <button type="button" class="product-btn" data-name="BP & SUGER">BP & SUGER</button>
+    <button type="button" class="product-btn" data-name="STAPUTAPU">STAPUTAPU</button>
+    <button type="button" class="product-btn" data-name="SLODWANA">SLODWANA</button>
+    <button type="button" class="product-btn" data-name="SHAYIZIFO MBIZA">SHAYIZIFO IMBIZA</button>
+    <button type="button" class="product-btn" data-name="NSIZI SHAYIZIFO">NSIZI SHAYIZIFO</button>
+    <button type="button" class="product-btn" data-name="NSIZI STROKE">NSIZI STROKE</button>
+    <button type="button" class="product-btn" data-name="MBIZA NO 1">NO 1 MBIZA</button>
+    <button type="button" class="product-btn" data-name="MHLABELO">MHLABELO</button>
+    <button type="button" class="product-btn" data-name="MBIZA EMHLOPHE (ISIWASHO)">MBIZA EMHLOPHE (ISIWASHO)</button>
+    <button type="button" class="product-btn" data-name="GUDUZA">GUDUZA</button>
+    <button type="button" class="product-btn" data-name="COMBO YAMA PILES">COMBO YAMA PILES</button>
+    <button type="button" class="product-btn" data-name="KHIPHA IDLISO POWDER">KHIPHA IDLISO POWDER</button>
+  </div>
+
+  <!-- Ezokuthandeka -->
+  <div class="category" data-category="Ezokuthandeka">
+    <h3>Ezokuthandeka</h3>
+    <button type="button" class="product-btn" data-name="MOYI MOYI">MOYI MOYI</button>
+    <button type="button" class="product-btn" data-name="IBHODLELA">IBHODLELA</button>
+    <button type="button" class="product-btn" data-name="SHUKELA">SHUKELA</button>
+    <button type="button" class="product-btn" data-name="GANDA GANDA">GANDA GANDA</button>
+    <button type="button" class="product-btn" data-name="UHLANGA">UHLANGA</button>
+    <button type="button" class="product-btn" data-name="KHIYE">KHIYE</button>
+    <button type="button" class="product-btn" data-name="SHINGAMU">SHINGAMU</button>
+    <button type="button" class="product-btn" data-name="INYAMAZANE">INYAMAZANE</button>
+    <button type="button" class="product-btn" data-name="INTELEZI">INTELEZI</button>
+    <button type="button" class="product-btn" data-name="NDLEBEZIKHAYA ILANGA">NDLEBEZIKHAYA ILANGA</button>
+    <button type="button" class="product-btn" data-name="COMBO YAMATHUNZI (UBHAVU)">COMBO YAMATHUNZI (UBHAVU)</button>
+    <button type="button" class="product-btn" data-name="XABANISA">XABANISA</button>
+    <button type="button" class="product-btn" data-name="SKHAFULO">SKHAFULO</button>
+  </div>
+</div>
+
+<div id="orderList">No products selected yet.</div>
+<button type="submit" id="submitBtn">Send Order</button>
+</form>
+<div id="message" class="message"></div>
+</main>
+
+<script>
+// Toggle category open/close
+document.querySelectorAll('.category h3').forEach(h3=>{
+    h3.addEventListener('click', ()=>h3.parentElement.classList.toggle('open'));
+});
+
+const form = document.getElementById('orderForm');
+const orderList = document.getElementById('orderList');
+const message = document.getElementById('message');
+let orderItems = {};
+
+// Product button click
+document.querySelectorAll('.product-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+        const name = btn.dataset.name;
+        orderItems[name] = (orderItems[name]||0)+1;
+        renderOrder();
+    });
+});
+
+function renderOrder(){
+    if(!Object.keys(orderItems).length){ orderList.textContent='No products selected yet.'; return; }
+    orderList.innerHTML='';
+    for(const [name, qty] of Object.entries(orderItems)){
+        const div=document.createElement('div');
+        div.className='order-item';
+        div.innerHTML=`<span>${name}</span>
+                       <input class="order-qty" type="number" min="1" value="${qty}">
+                       <button type="button" class="remove-btn">Remove</button>`;
+        div.querySelector('.order-qty').addEventListener('change', e=>{
+            const val=parseInt(e.target.value);
+            if(val>0) orderItems[name]=val;
+            renderOrder();
+        });
+        div.querySelector('.remove-btn').addEventListener('click', ()=>{
+            delete orderItems[name]; 
+            renderOrder();
+        });
+        orderList.appendChild(div);
+    }
+}
+
+// Submit form with spinner
+form.addEventListener('submit', async e=>{
+    e.preventDefault();
+    if(!Object.keys(orderItems).length){
+        message.textContent='Select at least 1 product';
+        message.className='message error';
+        return;
+    }
+
+    const submitBtn = document.getElementById('submitBtn');
+    submitBtn.disabled = true;
+    const originalText = submitBtn.textContent;
+    submitBtn.innerHTML = 'Sending <div class="spinner"></div>';
+
+    const data = new FormData(form);
+    const products = Object.entries(orderItems).map(([n,q])=>`${n} (x${q})`);
+    const payload = {
+        name: data.get('name'),
+        sender_number: data.get('sender_number'),
+        receiver_name: data.get('receiver_name'),
+        receiver_number: data.get('receiver_number'),
+        pep_code: data.get('pep_code'),
+        products
+    };
+
+    try{
+        const res = await fetch('/submit',{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify(payload)
+        });
+        const json = await res.json();
+        message.textContent=json.message;
+        message.className=json.success?'message success':'message error';
+        if(json.success){ 
+            form.reset(); 
+            orderItems={}; 
+            renderOrder(); 
+        }
+    }catch(err){ 
+        message.textContent='Network error'; 
+        message.className='message error'; 
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalText;
+    }
+});
+</script>
+</body>
+</html>
