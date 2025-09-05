@@ -1,3 +1,10 @@
+const fetch = require("node-fetch");
+const { Headers, Request, Response } = fetch;
+globalThis.fetch = fetch;
+globalThis.Headers = Headers;
+globalThis.Request = Request;
+globalThis.Response = Response;
+
 require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
