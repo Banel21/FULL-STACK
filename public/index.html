@@ -331,27 +331,27 @@ form.addEventListener('submit', async e=>{
         products
     };
 
-    try{
-        const res = await fetch('/submit',{
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body:JSON.stringify(payload)
-        });
-        const json = await res.json();
-        message.textContent=json.message;
-        message.className=json.success?'message success':'message error';
-        if(json.success){ 
-            form.reset(); 
-            orderItems={}; 
-            renderOrder(); 
-        }
-    }catch(err){ 
-        message.textContent='Network error'; 
-        message.className='message error'; 
-    } finally {
-        submitBtn.disabled = false;
-        submitBtn.textContent = originalText;
+   try{
+    const res = await fetch('https://full-stack-t5ha.onrender.com/submit', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(payload)
+    });
+    const json = await res.json();
+    message.textContent=json.message;
+    message.className=json.success?'message success':'message error';
+    if(json.success){ 
+        form.reset(); 
+        orderItems={}; 
+        renderOrder(); 
     }
+}catch(err){ 
+    message.textContent='Network error'; 
+    message.className='message error'; 
+} finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = originalText;
+}
 });
 </script>
 </body>
